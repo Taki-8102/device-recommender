@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -m 90 -w \"\\\\n[HTTP %{http_code}, %{time_total}s]\\\\n\" https://device-recommender-ttm8.onrender.com/health)",
+      "Bash(curl -s -m 90 -o /dev/null -w \"[HTTP %{http_code}]\\\\n\" https://device-recommender-ttm8.onrender.com/)",
+      "Bash(curl -s -m 30 -o /dev/null -w \"[HTTP %{http_code}]\\\\n\" https://github.com)",
+      "Bash(curl -sv -m 60 https://device-recommender-ttm8.onrender.com/health)"
+    ]
+  }
+}
