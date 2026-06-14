@@ -1,0 +1,233 @@
+================================================================================
+                    DEVICE RECOMMENDER - DATA MODEL DOCUMENTATION
+================================================================================
+
+PROJECT TYPE: Stateless API (No Database Storage)
+--------------------------------------------------------------------------------
+This project does NOT store data in a database. It processes requests in 
+real-time and returns recommendations from the Gemini AI API. All data exists
+only during the request-response cycle.
+
+However, for academic purposes (ER Diagram), below are the logical entities
+and their relationships if this system were to be implemented with a database.
+
+
+================================================================================
+                              LOGICAL ENTITIES
+================================================================================
+
+1. USER_REQUEST (Input from Frontend)
+--------------------------------------------------------------------------------
+| Field Name       | Data Type    | Description                    | Required |
+|------------------|--------------|--------------------------------|----------|
+| request_id       | UUID         | Unique identifier              | Yes      |
+| device           | VARCHAR(50)  | Device type                    | Yes      |
+| budget           | VARCHAR(50)  | Budget range                   | Yes      |
+| purpose          | VARCHAR(100) | Primary use case               | Yes      |
+| brand            | VARCHAR(50)  | Preferred brand                | No       |
+| city             | VARCHAR(100) | User's city for shops          | No       |
+| screen_size      | VARCHAR(50)  | Screen size preference         | No       |
+| storage          | VARCHAR(50)  | Storage requirement            | No       |
+| ram              | VARCHAR(50)  | RAM requirement                | No       |
+| battery_life     | VARCHAR(50)  | Battery priority               | No       |
+| weight_priority  | VARCHAR(50)  | Portability preference         | No       |
+| special_features | TEXT/JSON    | Array of features              | No       |
+| raw_query        | TEXT         | Original natural language text | No       |
+| created_at       | DATETIME     | Timestamp                      | Yes      |
+
+Possible Values:
+- device: Smartphone, Laptop, Tablet, Gaming PC, Notebook
+- budget: Under $300, $300-$600, $600-$1000, $1000-$1500, $1500-$2000, $2000+
+- purpose: General, Gaming, Photography/Videography, Office/Productivity, 
+           Student/Education, Travel/Portability, Content Creation, 
+           Software Development
+
+
+2. PRODUCT_RECOMMENDATION (Output from AI)
+--------------------------------------------------------------------------------
+| Field Name       | Data Type    | Description                    | Required |
+|------------------|--------------|--------------------------------|----------|
+| recommendation_id| UUID         | Unique identifier              | Yes      |
+| request_id       | UUID         | FK to USER_REQUEST             | Yes      |
+| product_name     | VARCHAR(200) | Full product name with model   | Yes      |
+| brand            | VARCHAR(50)  | Brand name                     | Yes      |
+| price            | VARCHAR(50)  | Estimated price                | Yes      |
+| image_url        | TEXT         | Product image URL              | No       |
+| reasoning        | TEXT         | Why this matches user needs    | Yes      |
+| created_at       | DATETIME     | Timestamp                      | Yes      |
+
+
+3. PRODUCT_SPECS (One-to-One with PRODUCT_RECOMMENDATION)
+--------------------------------------------------------------------------------
+| Field Name       | Data Type    | Description                    | Required |
+|------------------|--------------|--------------------------------|----------|
+| spec_id          | UUID         | Unique identifier              | Yes      |
+| recommendation_id| UUID         | FK to PRODUCT_RECOMMENDATION   | Yes      |
+| display          | VARCHAR(100) | Screen size and type           | No       |
+| processor        | VARCHAR(100) | CPU/Chip name                  | No       |
+| ram              | VARCHAR(50)  | RAM amount                     | No       |
+| storage          | VARCHAR(50)  | Storage capacity               | No       |
+| battery          | VARCHAR(100) | Battery capacity/life          | No       |
+| weight           | VARCHAR(50)  | Weight in kg/lbs               | No       |
+| special_features | TEXT/JSON    | Array of special features      | No       |
+
+
+4. PROS_CONS (One-to-Many with PRODUCT_RECOMMENDATION)
+--------------------------------------------------------------------------------
+| Field Name       | Data Type    | Description                    | Required |
+|------------------|--------------|--------------------------------|----------|
+| id               | UUID         | Unique identifier              | Yes      |
+| recommendation_id| UUID         | FK to PRODUCT_RECOMMENDATION   | Yes      |
+| type             | ENUM         | 'PRO' or 'CON'                 | Yes      |
+| description      | VARCHAR(255) | Pro or Con text                | Yes      |
+
+
+5. NEARBY_SHOP (One-to-Many with PRODUCT_RECOMMENDATION)
+--------------------------------------------------------------------------------
+| Field Name       | Data Type    | Description                    | Required |
+|------------------|--------------|--------------------------------|----------|
+| shop_id          | UUID         | Unique identifier              | Yes      |
+| recommendation_id| UUID         | FK to PRODUCT_RECOMMENDATION   | Yes      |
+| name             | VARCHAR(200) | Shop name                      | Yes      |
+| address          | TEXT         | Full address                   | Yes      |
+| phone            | VARCHAR(50)  | Contact phone number           | No       |
+
+
+6. ALTERNATIVE_PRODUCT (One-to-Many with PRODUCT_RECOMMENDATION)
+--------------------------------------------------------------------------------
+| Field Name       | Data Type    | Description                    | Required |
+|------------------|--------------|--------------------------------|----------|
+| alternative_id   | UUID         | Unique identifier              | Yes      |
+| recommendation_id| UUID         | FK to PRODUCT_RECOMMENDATION   | Yes      |
+| name             | VARCHAR(200) | Alternative product name       | Yes      |
+| price            | VARCHAR(50)  | Price                          | Yes      |
+| reason           | TEXT         | Why it's a good alternative    | Yes      |
+
+
+================================================================================
+                              ENTITY RELATIONSHIPS
+================================================================================
+
+┌─────────────────────┐
+│    USER_REQUEST     │
+│    (1 Request)      │
+└──────────┬──────────┘
+           │
+           │ 1:1 (One request generates one recommendation)
+           ▼
+┌─────────────────────┐
+│PRODUCT_RECOMMENDATION│
+│  (1 Recommendation) │
+└──────────┬──────────┘
+           │
+     ┌─────┼─────┬─────────────┬─────────────┐
+     │     │     │             │             │
+     │ 1:1 │ 1:N │         1:N │         1:N │
+     ▼     │     ▼             ▼             ▼
+┌─────────┐│ ┌─────────┐ ┌───────────┐ ┌─────────────┐
+│ PRODUCT ││ │PROS_CONS│ │NEARBY_SHOP│ │ ALTERNATIVE │
+│  SPECS  ││ │(2-5 each│ │ (0-3 each)│ │  PRODUCT    │
+│(1 each) ││ │  type)  │ │           │ │  (0-3 each) │
+└─────────┘│ └─────────┘ └───────────┘ └─────────────┘
+           │
+           │
+
+
+================================================================================
+                         RELATIONSHIP SUMMARY (for ER)
+================================================================================
+
+1. USER_REQUEST (1) ────────── (1) PRODUCT_RECOMMENDATION
+   - One request produces one recommendation
+
+2. PRODUCT_RECOMMENDATION (1) ────────── (1) PRODUCT_SPECS
+   - One recommendation has one set of specifications
+
+3. PRODUCT_RECOMMENDATION (1) ────────── (N) PROS_CONS
+   - One recommendation has multiple pros and cons
+
+4. PRODUCT_RECOMMENDATION (1) ────────── (N) NEARBY_SHOP
+   - One recommendation can have multiple nearby shops
+
+5. PRODUCT_RECOMMENDATION (1) ────────── (N) ALTERNATIVE_PRODUCT
+   - One recommendation can have multiple alternatives
+
+
+================================================================================
+                              DATA FLOW DIAGRAM
+================================================================================
+
+[User Input]
+     │
+     ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     FRONTEND (React)                        │
+│  - Chat interface captures natural language or form input   │
+│  - Parses input into structured USER_REQUEST                │
+└─────────────────────────────────────────────────────────────┘
+     │
+     │ HTTP POST /recommend
+     │ (JSON: USER_REQUEST data)
+     ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     BACKEND (Flask)                         │
+│  1. Receives USER_REQUEST                                   │
+│  2. Constructs prompt for Gemini AI                         │
+│  3. Calls Gemini API with Google Search grounding           │
+│  4. Parses JSON response into PRODUCT_RECOMMENDATION        │
+│  5. Calls Google Custom Search API for product image        │
+│  6. Returns complete recommendation to frontend             │
+└─────────────────────────────────────────────────────────────┘
+     │
+     │ HTTP Response
+     │ (JSON: PRODUCT_RECOMMENDATION + related entities)
+     ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     FRONTEND (React)                        │
+│  - Displays recommendation in chat bubble                   │
+│  - Shows ProductCardMini component with all data            │
+└─────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+                         EXTERNAL API INTEGRATIONS
+================================================================================
+
+1. GOOGLE GEMINI API (AI Recommendations)
+--------------------------------------------------------------------------------
+   - Input: User preferences as prompt text
+   - Output: JSON with product recommendation
+   - Grounding: Google Search for real-time product data
+
+2. GOOGLE CUSTOM SEARCH API (Product Images)
+--------------------------------------------------------------------------------
+   - Input: Product name
+   - Output: Image URL
+   - Free Tier: 100 queries/day
+
+
+================================================================================
+                              NOTES FOR ER DIAGRAM
+================================================================================
+
+1. PRIMARY KEYS: All entities use UUID as primary key
+
+2. FOREIGN KEYS:
+   - PRODUCT_RECOMMENDATION.request_id → USER_REQUEST.request_id
+   - PRODUCT_SPECS.recommendation_id → PRODUCT_RECOMMENDATION.recommendation_id
+   - PROS_CONS.recommendation_id → PRODUCT_RECOMMENDATION.recommendation_id
+   - NEARBY_SHOP.recommendation_id → PRODUCT_RECOMMENDATION.recommendation_id
+   - ALTERNATIVE_PRODUCT.recommendation_id → PRODUCT_RECOMMENDATION.recommendation_id
+
+3. CARDINALITY:
+   - USER_REQUEST to PRODUCT_RECOMMENDATION: 1:1
+   - PRODUCT_RECOMMENDATION to PRODUCT_SPECS: 1:1
+   - PRODUCT_RECOMMENDATION to PROS_CONS: 1:N (typically 3 pros, 2 cons)
+   - PRODUCT_RECOMMENDATION to NEARBY_SHOP: 1:N (typically 2-3 shops)
+   - PRODUCT_RECOMMENDATION to ALTERNATIVE_PRODUCT: 1:N (typically 2 alternatives)
+
+4. OPTIONAL ENTITIES:
+   - NEARBY_SHOP: Only populated if user provides city
+   - ALTERNATIVE_PRODUCT: May be empty if no alternatives found
+
+================================================================================
