@@ -4,6 +4,73 @@ from werkzeug.security import generate_password_hash
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "recommender.db")
 
+# Real verified shops in Luang Prabang. Used to seed a fresh database (e.g. after a
+# Render redeploy wipes the SQLite file) so the demo always comes back with the real
+# approved shops instead of placeholder data. password_hash values are the owners'
+# actual hashes so their existing logins keep working after a reseed.
+SHOP_SEED = [
+    {
+        "username": "MRIT",
+        "password_hash": "scrypt:32768:8:1$wpTSNcI8kcV0S7Eu$7cb683db9633cd6a15854e20ef1d6ce5085bda62947a0059a046a83d8273a7ef5ec59f50a887c57b048159ccb6e4a98be24bac74373cb6b518d92f08cce9fe5b",
+        "name": "MRIT Shop ທ້າວ ໄອທີ",
+        "google_map_url": "https://maps.app.goo.gl/RFKaXARvVvEoAtjEA?g_st=ac",
+        "address_text": "ບ້ານ ວຽງໃໝ່, ເມືອງ ຫຼວງພະບາງ, ແຂວງ ຫຼວງພະບາງ, ລາວ",
+        "city": "ຫຼວງພະບາງ",
+        "phone": "02059450123",
+        "social_media_links": '{"facebook":"https://www.facebook.com/share/1EqYFJdxvS/","line":"","instagram":""}',
+        "image_path": "/uploads/shops/shop_4.png",
+        "inventory": ["Laptop", "Smartphone", "Tablet"],
+    },
+    {
+        "username": "LTH",
+        "password_hash": "scrypt:32768:8:1$zccB1TePKbkWfUqI$3ea6f0422438d9258acf9499080f137caa4cbe6520a88fcbd206b4fd5b11552ea071832b55e53883c0ef901ead4d1b3867f4149cb04375fb894c133cced93bab",
+        "name": "LTH Luangprabang",
+        "google_map_url": "https://maps.app.goo.gl/j8CFz1J8zXVgAkpa6?g_st=aw",
+        "address_text": "ບ້ານໂພສີ, ເມືອງຫຼວງພະບາງ, ແຂວງຫຼວງພະບາງ",
+        "city": "ຫຼວງພະບາງ",
+        "phone": "021453095",
+        "social_media_links": '{"facebook":"https://www.facebook.com/share/1E7bQ5orpE/","line":"","instagram":""}',
+        "image_path": "/uploads/shops/shop_5.png",
+        "inventory": ["Smartphone", "Tablet"],
+    },
+    {
+        "username": "TK",
+        "password_hash": "scrypt:32768:8:1$8AEiIKhqD6PMlx2s$f984f359858646865ae143bc66bebd103e833e19ba988e1459b3807022a0599ae32cfa875890f6d565df4778e555ba5f7a081846a4c7d75bbca54105906f396c",
+        "name": "ຕົ້ນຂາມ ໂມບາຍ",
+        "google_map_url": "https://maps.app.goo.gl/e7CxsfnxfxuLD1dA8?g_st=aw",
+        "address_text": "ບ້ານມະໂນ (ໃກ້ກັບທະນາຄານການຄ້າ), ເມືອງຫຼວງພະບາງ, ແຂວງຫຼວງພະບາງ",
+        "city": "ຫຼວງພະບາງ",
+        "phone": "2023888883",
+        "social_media_links": '{"facebook":"https://www.facebook.com/share/1E45kpE9gR/","line":"","instagram":""}',
+        "image_path": "/uploads/shops/shop_6.jpeg",
+        "inventory": ["Smartphone"],
+    },
+    {
+        "username": "adviceshopLPB",
+        "password_hash": "scrypt:32768:8:1$Mg4fJPMhJuTsj5BE$def7d83226f6e12c650aa158dae2f39b54772cbc9b93d28ae733509b605a3713e3ea36fca66f6c0ed331b5628c3dd7ba6246ef397ee2a50a0aec4b0c7f790f29",
+        "name": "Advice Shop - ແອັດໄວສ໌ ຫຼວງພະບາງ",
+        "google_map_url": "https://maps.app.goo.gl/6xr5mrjUTrLiNHGh9?g_st=aw",
+        "address_text": "ສາມແຍກທາງໄປ 3 ແຝດ, ບ້ານໂພນແພງ, ນະຄອນຫຼວງພະບາງ, ແຂວງຫຼວງພະບາງ",
+        "city": "ຫຼວງພະບາງ",
+        "phone": "02055509000",
+        "social_media_links": '{"facebook":"https://www.facebook.com/share/1BacimEEA7/","line":"","instagram":""}',
+        "image_path": "/uploads/shops/shop_7.png",
+        "inventory": ["Gaming PC", "Laptop"],
+    },
+    {
+        "username": "Skmobile",
+        "password_hash": "scrypt:32768:8:1$grkR34hGAeZj6lfH$e7d21e496890707bc38b8fbf8e3fa6ea7cbc355b49252f4c709767869fa80adda498195f6896fe352743e5026285594ecd3af2d9a68d6f6a78175edcb02b42dd",
+        "name": "ສົ້ນຂົວໄອທີMobile & Computer ສູນຈໍາຫນ່າຍໂທລະສັບແລະຄອມພິວເຕີ",
+        "google_map_url": "https://maps.app.goo.gl/g2WQgT7Q7LrhwTZJA?g_st=aw",
+        "address_text": "ທາງໄປຕະຫຼາດໂພສີ ຂ້າງຂົວ, ບ້ານໂພສີ, ນະຄອນຫຼວງພະບາງ, ແຂວງຫຼວງພະບາງ",
+        "city": "ຫຼວງພະບາງ",
+        "phone": "02028638888",
+        "social_media_links": '{"facebook":"https://www.facebook.com/share/1CsDZiNdZs/","line":"","instagram":""}',
+        "image_path": "/uploads/shops/shop_8.png",
+        "inventory": ["Gaming PC", "Laptop", "Smartphone", "Tablet"],
+    },
+]
+
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -120,73 +187,37 @@ def init_db():
         except Exception:
             pass  # Column already exists
 
-    # Seed default Admin and Shops if none exist
+    # Seed default Admin and the real verified Luang Prabang shops if none exist.
     cursor.execute("SELECT COUNT(*) FROM users")
     if cursor.fetchone()[0] == 0:
-        print("[Seeding] Seeding default users...")
-        # Password hashes for seed users
+        print("[Seeding] Seeding admin user...")
         admin_pass = generate_password_hash("admin123")
-        shop1_pass = generate_password_hash("shop123")
-        shop2_pass = generate_password_hash("shop123")
-        shop3_pass = generate_password_hash("shop123")
-        
-        cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)", 
+        cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
                        ("admin", admin_pass, "admin"))
-        cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)", 
-                       ("banana_it", shop1_pass, "shop"))
-        cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)", 
-                       ("jib_shop", shop2_pass, "shop"))
-        cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)", 
-                       ("lao_digital", shop3_pass, "shop"))
-        
-        # Get user ids
-        cursor.execute("SELECT id, username FROM users")
-        user_map = {row["username"]: row["id"] for row in cursor.fetchall()}
-        
-        # Seed shops
-        print("[Seeding] Seeding shops...")
-        cursor.execute("""
-        INSERT INTO shops (user_id, name, google_map_url, address_text, city, phone, social_media_links, is_verified)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            user_map["banana_it"], 
-            "Banana IT (Central World Branch)",
-            "https://maps.app.goo.gl/CentralWorldBananaIT",
-            "4th Floor, Central World Shopping Mall, Pathum Wan, Bangkok 10330",
-            "Bangkok",
-            "+66 2 250 8888",
-            '{"facebook": "https://facebook.com/bananaitshop", "line": "@bananait"}',
-            1 # verified
-        ))
-        
-        cursor.execute("""
-        INSERT INTO shops (user_id, name, google_map_url, address_text, city, phone, social_media_links, is_verified)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            user_map["jib_shop"], 
-            "JIB Computer (Fortune Town Branch)",
-            "https://maps.app.goo.gl/FortuneTownJIB",
-            "3rd Floor, Fortune Town IT Mall, Din Daeng, Bangkok 10400",
-            "Bangkok",
-            "+66 2 642 1234",
-            '{"facebook": "https://facebook.com/JIBComputerGroup", "instagram": "jib.computer"}',
-            0 # pending/unverified
-        ))
 
-        cursor.execute("""
-        INSERT INTO shops (user_id, name, google_map_url, address_text, city, phone, social_media_links, is_verified)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            user_map["lao_digital"], 
-            "Lao Digital Store (Luang Prabang Branch)",
-            "https://maps.google.com/?q=Luang+Prabang",
-            "Sisavangvong Road, Luang Prabang 06000",
-            "Luang Prabang",
-            "+856 71 212 345",
-            '{"facebook": "https://facebook.com/laodigitalstore", "line": "@laodigital"}',
-            1 # verified
-        ))
-        
+        print(f"[Seeding] Seeding {len(SHOP_SEED)} verified shops...")
+        for s in SHOP_SEED:
+            cursor.execute(
+                "INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'shop')",
+                (s["username"], s["password_hash"])
+            )
+            user_id = cursor.lastrowid
+            cursor.execute("""
+                INSERT INTO shops
+                  (user_id, name, google_map_url, address_text, city, phone,
+                   social_media_links, is_verified, image_path)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
+            """, (
+                user_id, s["name"], s["google_map_url"], s["address_text"],
+                s["city"], s["phone"], s["social_media_links"], s["image_path"],
+            ))
+            shop_id = cursor.lastrowid
+            for category in s["inventory"]:
+                cursor.execute(
+                    "INSERT OR IGNORE INTO shop_inventory (shop_id, device_category) VALUES (?, ?)",
+                    (shop_id, category)
+                )
+
     conn.commit()
     conn.close()
     print("[Database] Database initialized and seed data inserted (if applicable).")

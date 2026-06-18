@@ -1879,35 +1879,184 @@ def health():
     return jsonify({"status": "healthy", "service": "device-recommender"})
 
 
+# ==========================================
+# CHATBOT — intent routing + scoped Q&A
+# ==========================================
+# What the assistant is allowed to talk about. Anything outside this → declined.
+_CHAT_SCOPE = (
+    "consumer electronics and technology only: smartphones, tablets, laptops, "
+    "desktop/gaming PCs, smartwatches, earbuds/headphones and their accessories; "
+    "the components and concepts inside them (RAM, storage/ROM, CPU/chipset, GPU, "
+    "battery/mAh, display type & refresh rate, cameras, charging, 5G, OS); "
+    "brand and model information, spec comparisons, buying advice, and the local "
+    "phone/computer shops in Laos."
+)
+
+
+def _build_chat_prompt(message: str, lang: str, shops_str: str) -> str:
+    """Prompt that BOTH classifies intent and writes the answer for info/out_of_scope."""
+    lang_line = "Answer in Lao (ພາສາລາວ)." if lang == "lo" else "Answer in English."
+    shop_block = (
+        f"\nVerified local shops you may reference (use ONLY these, never invent a shop):\n{shops_str}\n"
+        if shops_str else ""
+    )
+    return f"""You are Aiycom, a friendly tech shopping assistant for users in Laos.
+You ONLY discuss {_CHAT_SCOPE}
+
+Classify the user's message into exactly one intent:
+- "recommend": the user wants you to suggest / pick / find a specific device to buy
+  (mentions a budget, "which should I buy", "recommend", "best phone for ...", etc.).
+- "info": an in-scope question that just needs an explanation or facts
+  (what is RAM, is 8GB enough, OLED vs LCD, what brands are good, basic specs of a
+  model, or which local shop sells a device).
+- "out_of_scope": anything NOT about consumer electronics / technology.
+
+Rules:
+- For "recommend": leave "answer" as an empty string — another system builds the product cards.
+- For "info": write a clear, friendly, beginner-friendly answer in 2-5 sentences. {lang_line}
+  If the user asks about local shops, use ONLY the verified shop list below and include
+  the shop name, address and phone number.
+- For "out_of_scope": set "answer" to ONE polite sentence saying you can only help with
+  phones, tablets, laptops and other tech, and invite them to ask a tech question. {lang_line}
+{shop_block}
+User message: "{message}"
+
+Return ONLY valid JSON, no markdown:
+{{"intent":"recommend|info|out_of_scope","answer":"..."}}"""
+
+
+@app.route("/chat", methods=["POST"])
+def chat():
+    """Route a free-text message: recommendation, in-scope Q&A, or polite decline."""
+    data    = request.json or {}
+    message = (data.get("message") or "").strip()
+    lang    = data.get("lang", "en")
+    if not message:
+        return jsonify({"success": False, "intent": "info",
+                        "answer": "Please type a question."}), 400
+    if len(message) > 500:
+        message = message[:500]
+
+    # Pull verified shops so in-scope shop questions get REAL answers (killer feature).
+    shops_str = ""
+    try:
+        conn = get_db_connection()
+        cur  = conn.cursor()
+        cur.execute(
+            "SELECT name, city, address_text, phone FROM shops "
+            "WHERE is_verified = 1 ORDER BY city, name LIMIT 40"
+        )
+        rows = cur.fetchall()
+        conn.close()
+        if rows:
+            shops_str = "\n".join(
+                f"- {r['name']} ({r['city']}) — {r['address_text']}, phone {r['phone']}"
+                for r in rows
+            )
+    except Exception as e:
+        print(f"[Chat] shop fetch failed: {e}")
+
+    prompt = _build_chat_prompt(message, lang, shops_str)
+    try:
+        raw = _gemini_generate(prompt).strip()
+        for fence in ("```json", "```"):
+            if raw.startswith(fence):
+                raw = raw[len(fence):]
+        if raw.endswith("```"):
+            raw = raw[:-3]
+        m = re.search(r'\{[\s\S]*\}', raw)
+        parsed = json.loads(m.group(0) if m else raw)
+        intent = parsed.get("intent", "info")
+        answer = (parsed.get("answer") or "").strip()
+    except Exception as e:
+        # Fail safe: if the classifier breaks, fall back to a recommendation so the
+        # user still gets a useful result instead of an error.
+        print(f"[Chat] classify failed, defaulting to recommend: {e}")
+        intent, answer = "recommend", ""
+
+    if intent not in ("recommend", "info", "out_of_scope"):
+        intent = "info"
+
+    return jsonify({"success": True, "intent": intent, "answer": answer})
+
+
 @app.route("/api/admin/trends", methods=["GET"])
 @token_required
 def admin_trends(current_user):
-    """Return daily recommendation counts for the last 7 days (for the admin chart)."""
+    """Return recommendation counts over a selectable window for the admin chart.
+    ?range=day   → last 24 hours, hourly buckets
+    ?range=week  → last 7 days,   daily buckets (default)
+    ?range=month → last 30 days,  daily buckets
+    ?range=year  → last 12 months, monthly buckets
+    """
     if current_user["role"] != "admin":
         return jsonify({"success": False, "message": "Unauthorized"}), 403
 
-    from datetime import date, timedelta
+    from datetime import datetime, date, timedelta, timezone
+    rng = (request.args.get("range") or "week").lower()
+    if rng not in ("day", "week", "month", "year"):
+        rng = "week"
+
     conn = get_db_connection()
     cur  = conn.cursor()
-    cur.execute("""
-        SELECT DATE(created_at) as day, COUNT(*) as count
-        FROM recommendation_logs
-        WHERE created_at >= DATE('now', '-6 days')
-        GROUP BY DATE(created_at)
-    """)
-    rows = {r["day"]: r["count"] for r in cur.fetchall()}
-    conn.close()
 
-    today = date.today()
-    daily = [
-        {
-            "date":  (today - timedelta(days=i)).isoformat(),
-            "label": (today - timedelta(days=i)).strftime("%d %b"),
-            "count": rows.get((today - timedelta(days=i)).isoformat(), 0),
-        }
-        for i in range(6, -1, -1)
-    ]
-    return jsonify({"success": True, "daily": daily})
+    if rng == "day":
+        # Hourly over the last 24 h. SQLite 'now' is UTC, so bucket in UTC too.
+        cur.execute("""
+            SELECT strftime('%Y-%m-%d %H', created_at) AS bucket, COUNT(*) AS count
+            FROM recommendation_logs
+            WHERE created_at >= datetime('now', '-23 hours')
+            GROUP BY bucket
+        """)
+        rows = {r["bucket"]: r["count"] for r in cur.fetchall()}
+        now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+        points = []
+        for i in range(23, -1, -1):
+            t   = now - timedelta(hours=i)
+            key = t.strftime("%Y-%m-%d %H")
+            points.append({"date": key, "label": t.strftime("%H:00"), "count": rows.get(key, 0)})
+
+    elif rng == "year":
+        # Monthly over the last 12 months.
+        cur.execute("""
+            SELECT strftime('%Y-%m', created_at) AS bucket, COUNT(*) AS count
+            FROM recommendation_logs
+            WHERE created_at >= date('now', 'start of month', '-11 months')
+            GROUP BY bucket
+        """)
+        rows = {r["bucket"]: r["count"] for r in cur.fetchall()}
+        today = date.today()
+        points = []
+        for i in range(11, -1, -1):
+            mm, yy = today.month - i, today.year
+            while mm <= 0:
+                mm += 12
+                yy -= 1
+            key = f"{yy:04d}-{mm:02d}"
+            points.append({"date": key, "label": date(yy, mm, 1).strftime("%b %y"),
+                           "count": rows.get(key, 0)})
+
+    else:
+        # Daily buckets: week = last 7 days, month = last 30 days.
+        days = 7 if rng == "week" else 30
+        cur.execute(
+            "SELECT DATE(created_at) AS day, COUNT(*) AS count FROM recommendation_logs "
+            "WHERE created_at >= DATE('now', ?) GROUP BY DATE(created_at)",
+            (f"-{days - 1} days",)
+        )
+        rows  = {r["day"]: r["count"] for r in cur.fetchall()}
+        today = date.today()
+        points = [
+            {
+                "date":  (today - timedelta(days=i)).isoformat(),
+                "label": (today - timedelta(days=i)).strftime("%d %b"),
+                "count": rows.get((today - timedelta(days=i)).isoformat(), 0),
+            }
+            for i in range(days - 1, -1, -1)
+        ]
+
+    conn.close()
+    return jsonify({"success": True, "range": rng, "daily": points})
 
 
 # ==========================================

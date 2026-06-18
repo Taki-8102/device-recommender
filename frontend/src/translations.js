@@ -3,6 +3,7 @@ const strings = {
     // ── Chat / App ──
     welcome:           "Hi! I'm Aiycom. Tell me what you're looking for, or use the guided setup below!",
     searching:         "Searching for the perfect device and nearby deals...",
+    thinking:          "Thinking...",
     resultIntro:       "Here's what I found for you!",
     errorPrefix:       "Sorry, something went wrong:",
     inputPlaceholder:  "Type your request...",
@@ -239,6 +240,14 @@ const strings = {
     loadingCheaper:   "Finding cheaper options...",
     tradeoffTitle:    "Trade-off Analysis",
     cheaperTitle:     "Cheaper Alternatives",
+    trend_day:        "Day",
+    trend_week:       "Week",
+    trend_month:      "Month",
+    trend_year:       "Year",
+    trendTitle_day:   "Last 24 Hours",
+    trendTitle_week:  "Last 7 Days",
+    trendTitle_month: "Last 30 Days",
+    trendTitle_year:  "Last 12 Months",
 
     // ── Sidebar (admin) ──
     userManagement:   "User Management",
@@ -363,6 +372,7 @@ const strings = {
     // ── Chat / App ──
     welcome:           "ສະບາຍດີ! ຂ້ອຍຊື່ Aiycom. ບອກຂ້ອຍວ່າທ່ານຕ້ອງການຫຍັງ ຫຼື ໃຊ້ຕົວຊ່ວຍຄັດເລືອກຂ້າງລຸ່ມ!",
     searching:         "ກຳລັງຄົ້ນຫາອຸປະກອນທີ່ດີທີ່ສຸດ ແລະ ຮ້ານໃກ້ຄຽງ...",
+    thinking:          "ກຳລັງຄິດ...",
     resultIntro:       "ນີ້ຄືສິ່ງທີ່ຂ້ອຍພົບສຳລັບທ່ານ!",
     errorPrefix:       "ຂໍໂທດ, ມີຂໍ້ຜິດພາດ:",
     inputPlaceholder:  "ພິມຄຳຂໍຂອງທ່ານ...",
@@ -599,6 +609,14 @@ const strings = {
     loadingCheaper:   "ກຳລັງຊອກທາງເລືອກ...",
     tradeoffTitle:    "ວິເຄາະຂໍ້ດີ-ຂໍ້ເສຍ",
     cheaperTitle:     "ທາງເລືອກໃນງົບຕ່ຳກວ່າ",
+    trend_day:        "ມື້",
+    trend_week:       "ອາທິດ",
+    trend_month:      "ເດືອນ",
+    trend_year:       "ປີ",
+    trendTitle_day:   "24 ຊົ່ວໂມງຜ່ານມາ",
+    trendTitle_week:  "7 ມື້ຜ່ານມາ",
+    trendTitle_month: "30 ມື້ຜ່ານມາ",
+    trendTitle_year:  "12 ເດືອນຜ່ານມາ",
 
     // ── Sidebar (admin) ──
     userManagement:   "ການຈັດການຜູ້ໃຊ້",

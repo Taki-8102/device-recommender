@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import {
   Menu, X, MessageSquare, Store, Settings, User, Users, ShieldCheck,
   Compass, ArrowUp, Plus, ArrowLeftRight, Clock, LogIn, Pencil,
-  TrendingDown, GitCompare,
+  GitCompare,
 } from "lucide-react";
 import { useLanguage } from "./context/LanguageContext";
 import ProductCarousel, { CompareTable } from "./components/ProductCarousel";
@@ -261,7 +261,7 @@ function App() {
     };
   };
 
-  const sendRequest = async (data, userMessage) => {
+  const sendRequest = async (data, userMessage, opts = {}) => {
     if (!user) {
       const count = parseInt(localStorage.getItem("guestSearchCount") || "0");
       if (count >= 3) {
@@ -271,7 +271,10 @@ function App() {
       localStorage.setItem("guestSearchCount", String(count + 1));
     }
 
-    setMessages((prev) => [...prev, { type: "user", content: userMessage }]);
+    // The chat router may have already echoed the user's message into the thread.
+    if (!opts.skipUserEcho) {
+      setMessages((prev) => [...prev, { type: "user", content: userMessage }]);
+    }
     setIsLoading(true);
     setMessages((prev) => [...prev, { type: "bot", content: t("searching"), isLoading: true, loadingStep: 0 }]);
 
@@ -354,19 +357,6 @@ function App() {
     }
   };
 
-  const handleCheaper = async () => {
-    if (!lastSearchData) return;
-    const raw  = lastSearchData.rawBudgetAmount || 0;
-    const cur  = lastSearchData.currency || "USD";
-    const cheaper = Math.floor(raw * 0.72);
-    const symbol  = cur === "USD" ? "$" : "₭";
-    const cheaperBudget = cheaper > 0
-      ? `${symbol}${cheaper.toLocaleString()}`
-      : lastSearchData.budget;
-    const label = `${t("chipCheaper")} (${cheaperBudget})`;
-    await sendRequest({ ...lastSearchData, budget: cheaperBudget, rawBudgetAmount: cheaper }, label);
-  };
-
   const handleAllCompare = (products) => {
     if (!products || products.length < 2) return;
     const firstType = detectDeviceType(products[0]);
@@ -380,7 +370,40 @@ function App() {
     if (!inputText.trim() || isLoading) return;
     const userMessage = inputText.trim();
     setInputText("");
-    await sendRequest(parseUserInput(userMessage), userMessage);
+
+    // Echo the user's message and show a "thinking" bubble while the router decides
+    // whether this is a recommendation, an in-scope tech question, or off-topic.
+    setMessages((prev) => [...prev, { type: "user", content: userMessage }]);
+    setIsLoading(true);
+    setMessages((prev) => [...prev, { type: "bot", content: t("thinking"), isLoading: true }]);
+
+    let intent = "recommend";
+    let answer = "";
+    try {
+      const res = await fetch((import.meta.env.VITE_API_URL||"http://localhost:5000")+"/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: userMessage, lang }),
+      });
+      const d = await res.json();
+      intent = d.intent || "recommend";
+      answer = d.answer || "";
+    } catch {
+      intent = "recommend"; // fail safe → still try to give product cards
+    }
+
+    // Drop the "thinking" bubble before showing the real response.
+    setMessages((prev) => prev.filter((m) => !m.isLoading));
+
+    if (intent === "recommend") {
+      setIsLoading(false);
+      // sendRequest re-adds its own loading state; skip the duplicate user echo.
+      await sendRequest(parseUserInput(userMessage), userMessage, { skipUserEcho: true });
+    } else {
+      // "info" or "out_of_scope" — just show the assistant's text answer, no cards.
+      setMessages((prev) => [...prev, { type: "bot", content: answer }]);
+      setIsLoading(false);
+    }
   };
 
   const handleWizardSubmit = async ({
@@ -615,15 +638,6 @@ function App() {
                               onClick={() => handleTradeoff(msg.products)}
                             >
                               <GitCompare size={12} strokeWidth={2} /> {t("chipTradeoff")}
-                            </button>
-                          )}
-                          {lastSearchData && (
-                            <button
-                              className="reco-action-chip"
-                              onClick={handleCheaper}
-                              disabled={isLoading}
-                            >
-                              <TrendingDown size={12} strokeWidth={2} /> {t("chipCheaper")}
                             </button>
                           )}
                         </div>

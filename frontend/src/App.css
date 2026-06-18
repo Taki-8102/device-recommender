@@ -2154,6 +2154,32 @@ svg {
 }
 
 /* ── 7-day trend bar chart ── */
+.trend-range-tabs {
+  display: flex;
+  gap: 0.3rem;
+  margin-bottom: 0.25rem;
+}
+.trend-range-tab {
+  flex: 1;
+  padding: 0.3rem 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.5);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.trend-range-tab:hover {
+  color: rgba(255,255,255,0.8);
+  background: rgba(255,255,255,0.08);
+}
+.trend-range-tab.active {
+  color: #fff;
+  background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+  border-color: transparent;
+}
 .trend-chart {
   display: flex;
   align-items: flex-end;

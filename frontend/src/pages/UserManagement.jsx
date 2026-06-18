@@ -132,7 +132,6 @@ function UserManagement() {
     <div className="dashboard-container">
       <div className="dashboard-header">
         <h1><Users size={20} strokeWidth={1.75} /> {t("userManagement")}</h1>
-        <p>{t("userMgmtSub")}</p>
       </div>
 
       {successMessage && <div className="dashboard-success-message">{successMessage}</div>}

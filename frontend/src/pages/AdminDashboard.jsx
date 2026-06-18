@@ -39,6 +39,7 @@ function AdminDashboard() {
     budgetStats: { lak: { count:0, min:0, max:0, avg:0, buckets:[] }, usd: { count:0, min:0, max:0, avg:0, buckets:[] } },
   });
   const [trends, setTrends]   = useState([]);
+  const [trendRange, setTrendRange] = useState("week");
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState("");
 
@@ -46,16 +47,21 @@ function AdminDashboard() {
   const headers = { Authorization: `Bearer ${token}` };
 
   useEffect(() => { fetchData(); }, []);
+  // Refetch only the chart when the day/week/month/year range changes.
+  useEffect(() => { fetchTrends(trendRange); }, [trendRange]);
+
+  const fetchTrends = async (range) => {
+    try {
+      const res = await axios.get(`${API}/api/admin/trends?range=${range}`, { headers });
+      if (res.data.success) setTrends(res.data.daily);
+    } catch { /* keep previous chart on error */ }
+  };
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [analyticsRes, trendsRes] = await Promise.all([
-        axios.get(`${API}/api/admin/analytics`, { headers }),
-        axios.get(`${API}/api/admin/trends`,    { headers }),
-      ]);
+      const analyticsRes = await axios.get(`${API}/api/admin/analytics`, { headers });
       if (analyticsRes.data.success) setAnalytics(analyticsRes.data.data);
-      if (trendsRes.data.success)    setTrends(trendsRes.data.daily);
     } catch {
       setError(t("failedFetchAdmin"));
     } finally {
@@ -186,32 +192,47 @@ function AdminDashboard() {
             onClick={() => toggleCard("trends")}
           >
             <Activity size={15} strokeWidth={1.75} />
-            <h2>Recommendations — Last 7 Days</h2>
+            <h2>Recommendations — {t(`trendTitle_${trendRange}`)}</h2>
             <ChevronDown size={15} strokeWidth={2} className={`collapse-chevron ${collapsed.trends ? "" : "rotated"}`} />
           </div>
 
           {!collapsed.trends && (
-            trends.length === 0 ? (
-              <p className="no-data">No data yet</p>
-            ) : (() => {
-              const maxVal = Math.max(...trends.map(d => d.count), 1);
-              return (
-                <div className="trend-chart">
-                  {trends.map((d, i) => (
-                    <div key={i} className="trend-col">
-                      <div className="trend-bar-wrap">
-                        {d.count > 0 && <span className="trend-val">{d.count}</span>}
-                        <div
-                          className="trend-bar"
-                          style={{ height: `${Math.max((d.count / maxVal) * 90, d.count > 0 ? 6 : 2)}%` }}
-                        />
+            <>
+              <div className="trend-range-tabs">
+                {["day", "week", "month", "year"].map((r) => (
+                  <button
+                    key={r}
+                    className={`trend-range-tab ${trendRange === r ? "active" : ""}`}
+                    onClick={() => setTrendRange(r)}
+                  >
+                    {t(`trend_${r}`)}
+                  </button>
+                ))}
+              </div>
+              {trends.length === 0 ? (
+                <p className="no-data">No data yet</p>
+              ) : (() => {
+                const maxVal = Math.max(...trends.map(d => d.count), 1);
+                // Many bars (month/day) would crowd the labels — hide them and rely on hover.
+                const showLabels = trends.length <= 12;
+                return (
+                  <div className="trend-chart">
+                    {trends.map((d, i) => (
+                      <div key={i} className="trend-col" title={`${d.label}: ${d.count}`}>
+                        <div className="trend-bar-wrap">
+                          {d.count > 0 && showLabels && <span className="trend-val">{d.count}</span>}
+                          <div
+                            className="trend-bar"
+                            style={{ height: `${Math.max((d.count / maxVal) * 90, d.count > 0 ? 6 : 2)}%` }}
+                          />
+                        </div>
+                        {showLabels && <span className="trend-date">{d.label}</span>}
                       </div>
-                      <span className="trend-date">{d.label}</span>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()
+                    ))}
+                  </div>
+                );
+              })()}
+            </>
           )}
         </div>
 
