@@ -377,13 +377,19 @@ function App() {
     setIsLoading(true);
     setMessages((prev) => [...prev, { type: "bot", content: t("thinking"), isLoading: true }]);
 
+    // Recent turns (before this message) so follow-ups like "which should I buy?" keep context.
+    const history = messages
+      .filter((m) => !m.isLoading && m.content)
+      .slice(-8)
+      .map((m) => ({ role: m.type === "user" ? "user" : "assistant", text: m.content }));
+
     let intent = "recommend";
     let answer = "";
     try {
       const res = await fetch((import.meta.env.VITE_API_URL||"http://localhost:5000")+"/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMessage, lang }),
+        body: JSON.stringify({ message: userMessage, lang, history }),
       });
       const d = await res.json();
       intent = d.intent || "recommend";

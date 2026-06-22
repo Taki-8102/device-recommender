@@ -1893,7 +1893,7 @@ _CHAT_SCOPE = (
 )
 
 
-def _build_chat_prompt(message: str, lang: str, shops_str: str) -> str:
+def _build_chat_prompt(message: str, lang: str, shops_str: str, history=None) -> str:
     """Prompt that BOTH classifies intent and writes the answer for info/out_of_scope."""
     today = datetime.date.today().isoformat()
     year  = datetime.datetime.now().year
@@ -1904,15 +1904,31 @@ def _build_chat_prompt(message: str, lang: str, shops_str: str) -> str:
         f"\nVerified local shops you may reference (use ONLY these, never invent a shop):\n{shops_str}\n"
         if shops_str else ""
     )
+
+    history_block = ""
+    if history:
+        lines = []
+        for h in history[-8:]:
+            role = "User" if h.get("role") == "user" else "Aiycom"
+            txt  = (h.get("text") or "").strip().replace("\n", " ")[:400]
+            if txt:
+                lines.append(f"{role}: {txt}")
+        if lines:
+            history_block = "Conversation so far (use it to resolve what the user means):\n" + \
+                            "\n".join(lines) + "\n\n"
+
     return f"""You are Aiycom, a friendly tech shopping assistant for users in Laos.
 Today's date is {today}. You ONLY discuss {_CHAT_SCOPE}
 
-Classify the user's message into exactly one intent:
-- "recommend": the user wants you to suggest / pick / find a device to buy within a budget
-  ("which should I buy", "recommend", "best phone for ...", mentions a budget).
-- "info": an in-scope question needing an explanation, a current price, a spec, or a
-  comparison of named models (what is RAM, is 8GB enough, OLED vs LCD, how much is the
-  S24 Ultra, "S24 Ultra vs S25 Ultra", which local shop sells a device).
+Classify the LATEST user message into exactly one intent, using the conversation so far:
+- "recommend": the user wants you to DISCOVER / find devices to buy by budget or use-case,
+  WITHOUT naming the exact models — e.g. "recommend a phone", "best phone for gaming under
+  5 million kip", "I want a big-screen phone around $500". A budget or open "find me
+  something" request → recommend (another system will build product cards).
+- "info": an in-scope question needing an explanation, a current price, a spec, a
+  comparison, OR a DECISION between SPECIFIC named models — including follow-ups that rely
+  on context ("S24 Ultra vs S25 Ultra", "which of these should I buy?", "is the S25 Ultra
+  worth it?", "what is RAM", which local shop sells a device).
 - "out_of_scope": anything NOT about consumer electronics / technology.
 
 Accuracy rules for "info" (IMPORTANT — your training data is outdated):
@@ -1927,6 +1943,12 @@ Accuracy rules for "info" (IMPORTANT — your training data is outdated):
   Never present a price as exact or final.
 - COMPARISON of two or more named models: give a short factual comparison — the key
   spec/price differences and who each suits — in 3-6 sentences.
+- DECISION questions ("which should I buy?", "which is better for me?"): if the
+  conversation or the message refers to specific models, recommend BETWEEN THOSE models —
+  e.g. suggest the higher/newer model if budget allows, and the cheaper one for a tighter
+  budget — in 3-6 sentences. Do NOT switch to unrelated phones. If no specific models are
+  in context and no budget is given, ask ONE short clarifying question (which models, or
+  what budget) instead of guessing.
 - Other info questions: a clear, beginner-friendly answer in 2-5 sentences.
 - Shop questions: use ONLY the verified shop list below (name, address, phone).
 - Always write the "answer" in the user's language. {lang_line}
@@ -1935,7 +1957,7 @@ For "recommend": leave "answer" as an empty string — another system builds the
 For "out_of_scope": set "answer" to ONE polite sentence saying you only help with phones,
 tablets, laptops and other tech, and invite a tech question. {lang_line}
 {shop_block}
-User message: "{message}"
+{history_block}Latest user message: "{message}"
 
 Return ONLY valid JSON, no markdown:
 {{"intent":"recommend|info|out_of_scope","answer":"..."}}"""
@@ -1970,6 +1992,17 @@ def chat():
     if len(message) > 500:
         message = message[:500]
 
+    # Recent conversation so follow-ups like "which one should I buy?" keep context.
+    raw_history = data.get("history") or []
+    history = []
+    if isinstance(raw_history, list):
+        for h in raw_history[-8:]:
+            if isinstance(h, dict) and h.get("text"):
+                history.append({
+                    "role": "user" if h.get("role") == "user" else "assistant",
+                    "text": str(h["text"])[:400],
+                })
+
     # Pull verified shops so in-scope shop questions get REAL answers (killer feature).
     shops_str = ""
     try:
@@ -1989,10 +2022,15 @@ def chat():
     except Exception as e:
         print(f"[Chat] shop fetch failed: {e}")
 
-    prompt = _build_chat_prompt(message, lang, shops_str)
+    prompt = _build_chat_prompt(message, lang, shops_str, history)
     # Ground price / availability / comparison questions in live search; keep simple
     # questions (greetings, "what is RAM") fast and quota-cheap with no grounding.
-    needs_search = _chat_needs_search(message)
+    # Also ground a context-dependent follow-up ("which should I buy?") when the recent
+    # conversation was about prices/models, so the advice uses current data.
+    last_bot = next((h["text"] for h in reversed(history) if h["role"] == "assistant"), "")
+    needs_search = _chat_needs_search(message) or (
+        len(message) < 40 and _chat_needs_search(last_bot)
+    )
     try:
         raw = _gemini_generate(prompt, grounding=needs_search).strip()
         for fence in ("```json", "```"):
