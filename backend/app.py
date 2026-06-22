@@ -1895,34 +1895,64 @@ _CHAT_SCOPE = (
 
 def _build_chat_prompt(message: str, lang: str, shops_str: str) -> str:
     """Prompt that BOTH classifies intent and writes the answer for info/out_of_scope."""
-    lang_line = "Answer in Lao (ພາສາລາວ)." if lang == "lo" else "Answer in English."
+    today = datetime.date.today().isoformat()
+    year  = datetime.datetime.now().year
+    usd_lak, thb_lak = _get_exchange_rates()
+    lang_line  = "Answer in Lao (ພາສາລາວ)." if lang == "lo" else "Answer in English."
+    price_unit = "Lao Kip (LAK, ₭)" if lang == "lo" else "USD"
     shop_block = (
         f"\nVerified local shops you may reference (use ONLY these, never invent a shop):\n{shops_str}\n"
         if shops_str else ""
     )
     return f"""You are Aiycom, a friendly tech shopping assistant for users in Laos.
-You ONLY discuss {_CHAT_SCOPE}
+Today's date is {today}. You ONLY discuss {_CHAT_SCOPE}
 
 Classify the user's message into exactly one intent:
-- "recommend": the user wants you to suggest / pick / find a specific device to buy
-  (mentions a budget, "which should I buy", "recommend", "best phone for ...", etc.).
-- "info": an in-scope question that just needs an explanation or facts
-  (what is RAM, is 8GB enough, OLED vs LCD, what brands are good, basic specs of a
-  model, or which local shop sells a device).
+- "recommend": the user wants you to suggest / pick / find a device to buy within a budget
+  ("which should I buy", "recommend", "best phone for ...", mentions a budget).
+- "info": an in-scope question needing an explanation, a current price, a spec, or a
+  comparison of named models (what is RAM, is 8GB enough, OLED vs LCD, how much is the
+  S24 Ultra, "S24 Ultra vs S25 Ultra", which local shop sells a device).
 - "out_of_scope": anything NOT about consumer electronics / technology.
 
-Rules:
-- For "recommend": leave "answer" as an empty string — another system builds the product cards.
-- For "info": write a clear, friendly, beginner-friendly answer in 2-5 sentences. {lang_line}
-  If the user asks about local shops, use ONLY the verified shop list below and include
-  the shop name, address and phone number.
-- For "out_of_scope": set "answer" to ONE polite sentence saying you can only help with
-  phones, tablets, laptops and other tech, and invite them to ask a tech question. {lang_line}
+Accuracy rules for "info" (IMPORTANT — your training data is outdated):
+- Use the Google Search tool to verify current facts before answering.
+- NEVER claim a device "is not launched yet" / "is only rumored" from memory. Check with
+  search; if today's date {today} is on or after its release, it is already available.
+- PRICE questions: search the current {year} retail price (prefer Thai retailers, then
+  convert) and state it clearly in {price_unit}. A small range is fine. Reference rates:
+  1 USD ≈ {usd_lak:,} LAK, 1 THB ≈ {thb_lak:,} LAK.
+- COMPARISON of two or more named models: give a short factual comparison — the key
+  spec/price differences and who each suits — in 3-6 sentences.
+- Other info questions: a clear, beginner-friendly answer in 2-5 sentences.
+- Shop questions: use ONLY the verified shop list below (name, address, phone).
+- Always write the "answer" in the user's language. {lang_line}
+
+For "recommend": leave "answer" as an empty string — another system builds the product cards.
+For "out_of_scope": set "answer" to ONE polite sentence saying you only help with phones,
+tablets, laptops and other tech, and invite a tech question. {lang_line}
 {shop_block}
 User message: "{message}"
 
 Return ONLY valid JSON, no markdown:
 {{"intent":"recommend|info|out_of_scope","answer":"..."}}"""
+
+
+# Keywords that signal a question needs live data (price / availability / comparison).
+# When present we enable Google Search grounding so the answer reflects 2026 reality
+# instead of the model's stale training knowledge.
+_CHAT_FRESH_KEYWORDS = (
+    "price", "cost", "how much", "how many", "baht", "thb", "usd", "dollar", "kip",
+    "ราคา", "ກີບ", "ລາຄາ", "ລາຄາ", "ເທົ່າໃດ", "ຣາຄາ",
+    "launch", "release", "released", "newest", "latest", "available", "out yet",
+    "vs", "versus", "compare", "comparison", "difference", "better than",
+    "ໃໝ່", "ລ່າສຸດ", "ຫຼ້າສຸດ", "ປຽບທຽບ", "ດີກວ່າ", "ອອກໃໝ່",
+)
+
+
+def _chat_needs_search(message: str) -> bool:
+    msg_l = message.lower()
+    return "$" in message or any(k in msg_l for k in _CHAT_FRESH_KEYWORDS)
 
 
 @app.route("/chat", methods=["POST"])
@@ -1957,8 +1987,11 @@ def chat():
         print(f"[Chat] shop fetch failed: {e}")
 
     prompt = _build_chat_prompt(message, lang, shops_str)
+    # Ground price / availability / comparison questions in live search; keep simple
+    # questions (greetings, "what is RAM") fast and quota-cheap with no grounding.
+    needs_search = _chat_needs_search(message)
     try:
-        raw = _gemini_generate(prompt).strip()
+        raw = _gemini_generate(prompt, grounding=needs_search).strip()
         for fence in ("```json", "```"):
             if raw.startswith(fence):
                 raw = raw[len(fence):]
