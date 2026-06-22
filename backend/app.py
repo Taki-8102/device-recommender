@@ -1922,6 +1922,9 @@ Accuracy rules for "info" (IMPORTANT — your training data is outdated):
 - PRICE questions: search the current {year} retail price (prefer Thai retailers, then
   convert) and state it clearly in {price_unit}. A small range is fine. Reference rates:
   1 USD ≈ {usd_lak:,} LAK, 1 THB ≈ {thb_lak:,} LAK.
+  ALWAYS end every price you mention with a clear estimate disclaimer — write
+  "{'(ລາຄາໂດຍປະມານ, ອາດປ່ຽນແປງຕາມຮ້ານ)' if lang == 'lo' else '(estimated price, may vary by shop)'}".
+  Never present a price as exact or final.
 - COMPARISON of two or more named models: give a short factual comparison — the key
   spec/price differences and who each suits — in 3-6 sentences.
 - Other info questions: a clear, beginner-friendly answer in 2-5 sentences.
