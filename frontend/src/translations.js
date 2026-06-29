@@ -5,6 +5,7 @@ const strings = {
     searching:         "Searching for the perfect device and nearby deals...",
     thinking:          "Thinking...",
     resultIntro:       "Here's what I found for you!",
+    noResults:         "Sorry, I couldn't find matching products this time. Please try again.",
     errorPrefix:       "Sorry, something went wrong:",
     inputPlaceholder:  "Type your request...",
 
@@ -374,6 +375,7 @@ const strings = {
     searching:         "ກຳລັງຄົ້ນຫາອຸປະກອນທີ່ດີທີ່ສຸດ ແລະ ຮ້ານໃກ້ຄຽງ...",
     thinking:          "ກຳລັງຄິດ...",
     resultIntro:       "ນີ້ຄືສິ່ງທີ່ຂ້ອຍພົບສຳລັບທ່ານ!",
+    noResults:         "ຂໍອະໄພ, ຄັ້ງນີ້ຂ້ອຍຫາສິນຄ້າທີ່ຕົງກັນບໍ່ໄດ້. ກະລຸນາລອງໃໝ່ອີກຄັ້ງ.",
     errorPrefix:       "ຂໍໂທດ, ມີຂໍ້ຜິດພາດ:",
     inputPlaceholder:  "ພິມຄຳຂໍຂອງທ່ານ...",
 

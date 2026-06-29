@@ -1703,6 +1703,12 @@ def _run_recommendation(data: dict, user_id):
             text = m.group(0)
         parsed = json.loads(text)
         products_list = parsed["products"] if "products" in parsed else [parsed]
+        # Keep only real products — guards against an empty/malformed AI response that
+        # would otherwise show the "here's what I found" intro with no cards under it.
+        products_list = [p for p in products_list if isinstance(p, dict) and p.get("productName")]
+        if not products_list:
+            yield {"type": "error", "msg": "No matching products found — please try again."}
+            return
 
         # Normalised device type from the user's request, so the UI shows the right
         # placeholder icon (laptop/tablet/desktop/phone) when an image is missing —

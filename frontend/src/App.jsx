@@ -320,6 +320,10 @@ function App() {
             setLastSearchData({ ...data, lang });
             setMessages((prev) => {
               const rest = prev.filter((m) => !m.isLoading);
+              // No products → show a clear retry message instead of an empty intro.
+              if (!event.products || event.products.length === 0) {
+                return [...rest, { type: "bot", content: t("noResults") }];
+              }
               return [...rest, { type: "bot", content: t("resultIntro"), products: event.products }];
             });
           } else if (event.type === "error") {
