@@ -264,34 +264,28 @@ def token_required(f):
 
 
 
-def _pick_best_image(items, product_name):
-    """Return best image URL from CSE results.
-    Prioritises thumbnailLink (Google-hosted, always loads, guaranteed to match
-    the queried product) over the raw link (may be inaccessible or off-topic).
-    Relevance > resolution — thumbnails are ~150 px but show the right device."""
-    name_tokens = set(product_name.lower().split())
+def _image_text(item: dict) -> str:
+    """Searchable text for a CSE image result: its title + the page it came from.
+    Far more reliable for matching than the raw image URL, which is usually an
+    opaque CDN path with no model name in it."""
+    return (item.get("title", "") + " " +
+            item.get("image", {}).get("contextLink", "")).lower()
 
-    # Pass 1 — item whose URL contains product name tokens (highest confidence)
-    for item in items:
-        direct = item.get("link", "").lower()
-        if any(tok in direct for tok in name_tokens if len(tok) > 3):
-            thumb = item.get("image", {}).get("thumbnailLink")
-            if thumb:
-                return thumb
 
-    # Pass 2 — first item's thumbnail (Google ranked it #1 for the query)
-    for item in items:
-        thumb = item.get("image", {}).get("thumbnailLink")
-        if thumb:
-            return thumb
-
-    # Pass 3 — fall back to direct link
-    for item in items:
-        link = item.get("link")
-        if link:
-            return link
-
-    return None
+def _image_relevant(item: dict, model_tokens: list, name_words: set) -> bool:
+    """True if a CSE image result actually depicts the queried product.
+    Requires every product token (brand, series, model number) to appear in the
+    title/source, and rejects wrong tiers (e.g. a 'Pro'/'Ultra' image when the base
+    model was searched)."""
+    text = _image_text(item)
+    if not text.strip():
+        return False
+    if not all(tok in text for tok in model_tokens):
+        return False
+    text_words = {w for w in re.split(r"[^a-z0-9]+", text) if w}
+    if any(tq in text_words and tq not in name_words for tq in _TIER_QUALIFIERS):
+        return False
+    return True
 
 
 # Tier qualifiers shared across all brands — if a result title contains one of these
@@ -414,6 +408,12 @@ def search_product_image(product_name, brand=None):
         f"{base} specs",                           # last resort
     ]
 
+    # Tokens the matching image must contain (brand + model, storage variant stripped).
+    name_words   = {w for w in re.split(r"[^a-z0-9]+", base.lower()) if w}
+    model_tokens = [w for w in name_words if len(w) >= 2]
+    model_nums   = [w for w in model_tokens if any(c.isdigit() for c in w)]  # e.g. s25, a36, 17
+
+    all_items = []
     for q in query_chain:
         print(f"[Search] Image query: {q}")
         try:
@@ -421,15 +421,40 @@ def search_product_image(product_name, brand=None):
         except Exception as e:
             print(f"[Error] Image search query failed: {e}")
             continue
-
         items = data.get("items", [])
         if not items:
             continue
+        all_items.extend(items)
+        # Strict: title/source contains every product token and the correct tier.
+        for item in items:
+            if _image_relevant(item, model_tokens, name_words):
+                url = item.get("image", {}).get("thumbnailLink") or item.get("link")
+                if url:
+                    print(f"[Image] strict match for '{product_name}'")
+                    return url
 
-        found = _pick_best_image(items, product_name)
-        if found:
-            return found
+    # Relaxed fallback: require the brand, every model-number token, and correct tier,
+    # but don't insist on the series words (handles titles like "Galaxy S25 Ultra").
+    for item in all_items:
+        text = _image_text(item)
+        if brand and brand.lower() not in text:
+            continue
+        if model_nums and not all(mn in text for mn in model_nums):
+            continue
+        text_words = {w for w in re.split(r"[^a-z0-9]+", text) if w}
+        if any(tq in text_words and tq not in name_words for tq in _TIER_QUALIFIERS):
+            continue
+        url = item.get("image", {}).get("thumbnailLink") or item.get("link")
+        if url:
+            print(f"[Image] relaxed match for '{product_name}'")
+            return url
 
+    # Last resort: first thumbnail seen — better than a broken/empty image.
+    for item in all_items:
+        thumb = item.get("image", {}).get("thumbnailLink")
+        if thumb:
+            print(f"[Image] fallback thumbnail for '{product_name}'")
+            return thumb
     return None
 
 
