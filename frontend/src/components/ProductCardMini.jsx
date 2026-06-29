@@ -26,6 +26,11 @@ function ProductCardMini({ product }) {
   }
 
   const getDeviceIcon = () => {
+    const tagged = (product.deviceType || product.device || "").toLowerCase();
+    if (tagged.includes("laptop") || tagged.includes("notebook")) return <Laptop {...ICO} />;
+    if (tagged.includes("tablet")) return <Tablet {...ICO} />;
+    if (tagged.includes("desktop") || tagged.includes("pc")) return <Tv2 {...ICO} />;
+    if (tagged.includes("phone")) return <Smartphone {...ICO} />;
     const name = (product.productName || "").toLowerCase();
     if (name.includes("laptop") || name.includes("macbook") || name.includes("thinkpad")) return <Laptop {...ICO} />;
     if (name.includes("ipad") || name.includes("tablet") || name.includes("tab")) return <Tablet {...ICO} />;

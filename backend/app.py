@@ -1704,10 +1704,20 @@ def _run_recommendation(data: dict, user_id):
         parsed = json.loads(text)
         products_list = parsed["products"] if "products" in parsed else [parsed]
 
+        # Normalised device type from the user's request, so the UI shows the right
+        # placeholder icon (laptop/tablet/desktop/phone) when an image is missing —
+        # product names like "Dell XPS 13" don't contain the word "laptop".
+        _d = (device or "Smartphone").lower()
+        if   "laptop" in _d or "notebook" in _d: device_norm = "laptop"
+        elif "tablet" in _d:                     device_norm = "tablet"
+        elif "pc" in _d or "desktop" in _d:      device_norm = "desktop"
+        else:                                    device_norm = "smartphone"
+
         # Convert priceUSD → formatted price string
         currency = data.get("currency", "USD")
         LAK_RATE, _ = _get_exchange_rates()
         for p in products_list:
+            p["deviceType"] = device_norm
             raw_price = p.pop("priceLocal", None) or p.pop("priceUSD", None)
             launch_usd = p.pop("launchPriceUSD", None)
             if currency == "LAK":

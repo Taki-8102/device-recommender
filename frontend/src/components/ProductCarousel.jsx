@@ -5,6 +5,7 @@ import {
   ThumbsUp, ThumbsDown, MapPin, Phone, CheckCircle,
   ChevronDown, ChevronUp, Bookmark, BookmarkCheck, AlertTriangle, Tag,
   ExternalLink, MessageCircle,
+  Laptop, Tablet, Smartphone,
 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 import "./ProductCarousel.css";
@@ -22,18 +23,28 @@ function trackClick(shopId, clickType) {
 
 const ICO = { size: 13, strokeWidth: 1.75 };
 
-const PLACEHOLDERS = {
-  laptop:     "💻",
-  tablet:     "📱",
-  smartphone: "📱",
+// Distinct placeholder icon per device type (shown when no product image is found).
+const PLACEHOLDER_ICON = {
+  laptop:     Laptop,
+  tablet:     Tablet,
+  desktop:    Monitor,
+  smartphone: Smartphone,
 };
 
 function detectDeviceType(product) {
-  const name = (product.productName || "").toLowerCase();
-  const brand = (product.brand || "").toLowerCase();
-  const combined = name + " " + brand;
-  if (combined.includes("laptop") || combined.includes("macbook") || combined.includes("notebook") || combined.includes("chromebook")) return "laptop";
-  if (combined.includes("tablet") || combined.includes("ipad") || combined.includes("tab ") || combined.includes("surface pro")) return "tablet";
+  // Prefer the type the backend tagged from the user's request — most reliable, since
+  // names like "Dell XPS 13" or "Xiaomi Pad 6" don't contain "laptop"/"tablet".
+  const tagged = (product.deviceType || product.device || "").toLowerCase();
+  if (tagged.includes("laptop") || tagged.includes("notebook")) return "laptop";
+  if (tagged.includes("tablet")) return "tablet";
+  if (tagged.includes("desktop") || tagged.includes("pc")) return "desktop";
+  if (tagged.includes("phone")) return "smartphone";
+
+  // Fallback: infer from name + brand (for saved/history items without a tag).
+  const c = ((product.productName || "") + " " + (product.brand || "")).toLowerCase();
+  if (/(laptop|macbook|notebook|chromebook|thinkpad|ideapad|legion|vivobook|zenbook|rog|tuf|zephyrus|nitro|predator|aspire|swift|pavilion|spectre|envy|omen|victus|xps|inspiron|latitude|elitebook|probook|\bgram\b|matebook|galaxy book|surface laptop)/.test(c)) return "laptop";
+  if (/(tablet|ipad|galaxy tab|\btab\b|matepad|mediapad|\bpad\b|surface pro|surface go)/.test(c)) return "tablet";
+  if (/(desktop|gaming pc|\bpc\b|imac|all-in-one)/.test(c)) return "desktop";
   return "smartphone";
 }
 
@@ -41,7 +52,7 @@ function getSpecsUrl(product, deviceType) {
   // Strip "(8GB RAM, 256GB Storage)" style suffixes — they confuse site searches
   const cleanName = (product.productName || "").replace(/\s*\(.*?\)\s*/g, "").trim();
   const q = encodeURIComponent(`${product.brand || ""} ${cleanName}`.trim());
-  if (deviceType === "laptop") {
+  if (deviceType === "laptop" || deviceType === "desktop") {
     return `https://www.notebookcheck.net/Search.html?q=${q}`;
   }
   return `https://www.gsmarena.com/results.php3?sQuickSearch=${q}`;
@@ -71,7 +82,7 @@ export function MiniCard({ product, isSelected, isDisabled, onToggleSelect, isSa
   }
 
   const deviceType    = detectDeviceType(product);
-  const placeholder   = PLACEHOLDERS[deviceType];
+  const PlaceholderIcon = PLACEHOLDER_ICON[deviceType] || Smartphone;
   const currentPrice  = parsePriceNum(product.price);
   const launchPrice   = parsePriceNum(product.launchPrice);
   const hasPriceDrop  = currentPrice && launchPrice && launchPrice > currentPrice * 1.04;
@@ -97,7 +108,9 @@ export function MiniCard({ product, isSelected, isDisabled, onToggleSelect, isSa
             {!imgError && product.imageUrl ? (
               <img src={product.imageUrl} alt={product.productName} onError={() => setImgError(true)} />
             ) : (
-              <div className="pcard-img-placeholder">{placeholder}</div>
+              <div className="pcard-img-placeholder">
+                <PlaceholderIcon size={34} strokeWidth={1.5} />
+              </div>
             )}
           </a>
           <a href={specsUrl} target="_blank" rel="noopener noreferrer"

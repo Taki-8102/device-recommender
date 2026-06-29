@@ -163,6 +163,11 @@ function App() {
   };
 
   const detectDeviceType = (product) => {
+    const tagged = (product.deviceType || product.device || "").toLowerCase();
+    if (tagged.includes("laptop") || tagged.includes("notebook")) return "laptop";
+    if (tagged.includes("tablet")) return "tablet";
+    if (tagged.includes("desktop") || tagged.includes("pc")) return "desktop";
+    if (tagged.includes("phone")) return "smartphone";
     const combined = ((product.productName || "") + " " + (product.brand || "")).toLowerCase();
     if (combined.includes("laptop") || combined.includes("macbook") || combined.includes("notebook") || combined.includes("chromebook")) return "laptop";
     if (combined.includes("tablet") || combined.includes("ipad") || combined.includes("tab ") || combined.includes("surface pro")) return "tablet";
